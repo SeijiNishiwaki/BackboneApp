@@ -1,5 +1,12 @@
+machine:
+  timezone:
+    Asia/Tokyo
+  node:
+    version: 0.10.22
+
 deployment:
   staging:
     branch: master
-    heroku:
-       appname:backbone-application
+  commands:
+      - git push git@heroku.com:backbone-application.git $CIRCLE_SHA1:refs/heads/master
+
