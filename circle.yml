@@ -7,6 +7,6 @@ machine:
 deployment:
   staging:
     branch: master
-  commands:
+    commands:
       - git push git@heroku.com:backbone-application.git $CIRCLE_SHA1:refs/heads/master
 
