@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <% include ../partials/header.ejs %>
+</head>
+
+<body>
+
+<!-- ========= ヘッダー ========= -->
+
+<div id="header">
+  <div class="navbar navbar-default navbar-static-top">
+    <div class="navbar-inner">
+      <div class="container">
+        <span class="navbar-brand">
+          <a href="./index.html#notes">Note Application Example</a>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<!-- ========= 出力 ========= -->
+
+<div id="main" class="container">
+
+
+
+
+  <div id="header-container"></div>
+  <div id="main-container"></div>
+</div>
+
+
+
+
+<script>
+
+$(function(){
+
+
+
+
+
+window.App = {};
+
+
+//Data
+//================================================================
+//データベース
+
+  //モデル
+  App.Note = Backbone.Model.extend({
+    defaults:{
+      title:'defaults',
+      body:'body'
+    }
+  });
+
+  //コレクション
+  App.NoteCollection = Backbone.Collection.extend({
+    model:App.Note,
+    localStorage: new Backbone.LocalStorage('Notes')
+  });
+
+  //コレクションをデフォルトの値にリセットする関数
+  var initializeNotes = function(){
+    var noteCollection = new App.NoteCollection([
+      {
+        title:'テスト１',
+        body:'テスト１です'
+      },
+      {
+        title:'テスト２です',
+        body:'テスト２です'
+      },
+      {
+        title:'これを消したら永続化される',
+        body:'削除してリロードしてももとに戻らない'
+      }
+    ]);
+    noteCollection.each(function(note){
+      note.save();
+    });
+    return noteCollection.models;
+  };
+
+
+
+//View
+//================================================================
+//ノート一覧画面の生成
+
+
+//ノートリストの子要素を生成する( NoteListView内で使用 )
+  App.NoteListItemView = Backbone.View.extend({
+    tagName:'tr',
+    initialize:function(){
+      this.model.on('destroy',this.remove,this)
+    },
+    events:{
+      'click .js-delete':'onClickDelete'
+    },
+    onClickDelete:function(){
+      this.model.destroy();
+    },
+    render:function(){
+      // console.log('test');
+      var template = $('#noteListItemView-template').html();
+      var html = _.template(template);
+      html = html(this.model.toJSON());
+      this.$el.html(html);
+      return this;
+    }
+  });
+      //ノートリストを親要素と結合して表示する
+        //親テンプレートに子テンプレートをはめ込む
+        App.NoteListView = Backbone.View.extend({
+          tagName:'table',
+          className:'table',
+          initialize:function(options){
+            this.collection = options.collection;
+            //コレクションのリセットイベントに応じて描画し直す
+            this.listenTo(this.collection,'reset',this.render);
+          },
+          render:function(){
+            //テンプレートを読み込む
+            var template = $('#noteListView-template').html();
+            this.$el.html(template);
+            this.renderItemViews();
+            return this;
+            },
+            //テンプレートに各モデルデータを入力してHTMLを生成する
+            //描画場所は
+            renderItemViews:function(){
+              var $insertionPoint = this.$('.js-noteListItemView-container');
+              this.collection.each(function(model){
+                var itemView = new App.NoteListItemView({
+                  model:model
+                });
+                $insertionPoint.append(itemView.render().$el);
+              },this);
+            }
+        });
+
+
+//View
+//================================================================
+//詳細表示画面の生成
+  App.NoteDetailView = Backbone.View.extend({
+    render:function(){
+      // console.log('detail');
+      var template = $('#noteDetailView-template').html();
+      // console.log(template);
+      var html = _.template(template);
+      html = html(this.model.toJSON());
+      this.$el.html(html);
+      return this;
+    }
+  });
+
+
+
+
+//View
+//================================================================
+//ノートの検索フォームと、新規作成ボタン
+  App.NoteControlView = Backbone.View.extend({
+    events:{
+      'submit .js-search-form':'onSubmit'
+    },
+    render:function(){
+      var html = $('#noteControlView-template').html();
+      this.$el.html(html);
+      return this;
+    },
+    onSubmit:function(e){// 繊維系のイベントは e.preventDefault()
+      e.preventDefault();
+      var query = this.$('.js-search-query').val();
+      this.trigger('submit:form',query);
+    }
+  });
+
+
+
+//View
+//================================================================
+//ノートのタイトル、ボディ入力フォーム
+
+  App.NoteFormView = Backbone.View.extend({
+    render:function(){
+      var template = $('#noteForm-template').html();
+      var html = _.template(template);
+      html = html(this.model.toJSON());
+      this.$el.html(html);
+      return this;
+    },
+    events:{
+      'submit form':'onSubmit'//submit:formイベントを受け取ったら onSubmitメソッドを実行
+    },
+    //送信ボタンを押すとフォームの中のデータをSubmit:formイベントで飛ばす?
+    onSubmit:function(e){
+      e.preventDefault();
+      var attrs = {};
+      console.log('テスト');
+      attrs.title = this.$('.js-noteTitle').val();
+      attrs.body = this.$('.js-noteBody').val();
+      this.trigger('submit:form',attrs); //submit:formイベントの発生
+
+      // ! submit form と submit:form
+      //これは実は違うイベントで
+      //submit form は form 要素で起きたsubmitイベントのこと
+      //submit:form は 文字通り submit:form イベントなので間違えるとどうなるかというと
+
+      //1. submitボタンを押すと onSubmitメソッドを実行
+      //2. onSubmitメソッドは その中で また submit formイベントを投げる
+      //3. ここで2つの Submit イベントが実行されたので、それを監視しているViewも2回実行する
+      //4. コレクションに 一回の送信で 2つの同じメモが作成される
+
+    }
+  });
+
+
+
+//View
+//================================================================
+//ルートに対して表示するViewを設定する
+
+  //js/router.js
+  App.Router = Backbone.Router.extend({
+    routes:{
+      'notes/:id':'showNoteDetail',
+      'notes/:id/edit':'showEditNote',
+      'new':'showNewNote',
+      'notes/search/:query':'searchNote',
+      '*actions':'defaultRoute',
+    },
+    //ノート一覧を表示（トップページ）
+    defaultRoute:function(){
+      this.showNoteList();
+      //URLを /notes にリライト
+      this.navigate('notes');
+      },
+      //デフォルトルートで実行
+      showNoteList:function(models){
+
+
+        if(!this.filteredCollection){//フィルターが作られていない場合、あたらしくfilterコレクションを作成
+          this.filteredCollection = new App.NoteCollection();
+        }
+        if(!App.mainContainer.has(App.NoteListView)){//現在の一覧表示がここにいれたビューのインスタンスじゃない時
+          var noteListView =  new App.NoteListView({
+            collection:this.filteredModel//検索された一覧deでビューを作成
+          });
+          App.mainContainer.show(noteListView);
+        }
+
+        models = models || App.noteCollection.models;//modelsに引数が入っていればそれをmodelsに そうでない場合は APP.noteCollection.models をmodelsにする
+
+        this.filteredCollection.reset(models);
+        this.showNoteControl();
+
+        // var noteListView = new App.NoteListView({
+        //  collection:App.noteCollection
+        // });
+        // App.mainContainer.show(noteListView);
+        // this.showNoteControl();
+    },
+    showEditNote:function(id){
+      // console.log(id);
+      var self = this;
+      var note = App.noteCollection.get(id);//showEditNoteをeachで回してモデルをidで取得する
+      // console.log(JSON.stringify(note));
+      var noteFormView = new App.NoteFormView({
+        model:note
+      });//これで formにtitle と body を突っ込んだHTMLが生成される
+      App.mainContainer.show(noteFormView);
+      console.log(noteFormView.render().el); //間違い？
+      noteFormView.on('submit:form',function(attrs){
+        console.log(attrs);
+        note.save(attrs);
+
+        self.showNoteDetail(note.get(id));// <----------　あれ？　文字列か？
+        self.navigate('notes/'+ note.get(id));
+      });//ボタンクリックで入力した値でコレクションにモデルを追加
+
+
+    },
+    //new のときに実行
+    showNewNote:function(){
+      // console.log('test');
+      var self = this;//別のビュー内でShowNoteList()を実行するためselfに逃がす
+      var noteFormView = new App.NoteFormView({
+        model:new App.Note()
+      });
+      //送信ボタンを押したら
+      noteFormView.on('submit:form',function(attrs){
+        // console.log('test');
+        App.noteCollection.create(attrs);
+        self.showNoteList();//トップを表示
+        self.navigate('notes')//URLをトップに変更
+      });
+      console.log('test');
+      App.mainContainer.show(noteFormView);
+      App.headerContainer.empty();
+    },
+    //新規作成ボタンと検索フォームHTMLを作成,描画する( ルータの中で作るべきじゃないような？？？ )
+    showNoteControl:function(){
+      var noteControlView = new App.NoteControlView();
+
+      noteControlView.on('submit:form',function(query){
+        this.searchNote(query);
+        this.navigate('notes/search/'+query);
+      },this)
+      App.headerContainer.show(noteControlView);
+    },
+    searchNote : function(query){
+      //Collection内のModelを条件と比較し、真になったModelを全て取得する
+      //Collection.filter(function(model){ return model.get(検索内容).indexOf('検索文字列') 比較演算 条件 });
+      var filteredModel = App.noteCollection.filter(function(model){
+        return model.get('title').indexOf(query) !== -1;
+      });
+      console.log(filteredModel)
+      this.showNoteList(filteredModel);
+    },
+    // notes/:id で実行
+    showNoteDetail:function(id){
+      // console.log('idクリック')
+      var note = App.noteCollection.get(id);
+      var noteDetailView = new App.NoteDetailView({
+        model:note
+      });
+      App.mainContainer.show(noteDetailView);
+      //新規作成ボタンはいらないので履きする
+      App.headerContainer.empty();
+    }
+  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//App.js
+
+
+
+//================================================================
+//全体のビューをコントロール
+
+
+//ビューHTMLの表示,削除をコントロールする
+  App.Container = Backbone.View.extend({
+    show:function(view){
+      this.destroyView(this.currentView);
+      this.$el.append(view.render().el);
+      this.currentView = view;
+    },
+    destroyView:function(view){
+      if(!view){return;}
+      view.off();
+      view.remove();
+    },
+    empty:function(){
+      this.destroyView(this.currentView);
+      this.currentView = null;
+    },
+    has:function(obj){
+      return this.currentView instanceof obj;
+    },
+  })
+
+
+//localstorage を使う設定担っている
+  App.noteCollection = new App.NoteCollection();
+
+//ヘッダーコンテイナーへ描画するビュー
+  App.headerContainer = new App.Container({
+    el:'#header-container'
+  });
+
+//メインコンテイナーへ描画するビュー
+  App.mainContainer = new App.Container({
+    el:'#main-container'
+  });
+
+
+//表示するデータを設定
+  App.noteCollection.fetch().then(function(notes){
+    if(notes.length === 0){//もしリストがなかったら
+      var models = initializeNotes();//ダミーデータをローカルストレージに上書き
+      App.noteCollection.reset(models);
+    }
+
+//できたデータをもとにHTMLビューを作成
+  var noteListView = new App.NoteListView({
+    collection:App.noteCollection
+  });
+
+//メインコンテイナーにつっこんで描画察せる
+  App.mainContainer.show(noteListView);
+
+
+//履歴を管理する
+  App.router = new App.Router();
+  Backbone.history.start();
+
+  });
+
+
+
+
+
+});
+
+
+
+
+
+
+
+
+</script>
+
+
+<script type="text/template" id="noteForm-template">
+  <form action="">
+    <div class="form-group">
+      <label for="noteTitle">Title</label>
+      <input type="text" class="form-control js-noteTitle" id="noteTitle" value="<%- title %>">
+    </div>
+    <div class="form-group">
+      <label for="noteBody">Body</label>
+      <textarea rows="8" class="form-control js-noteBody">
+        <%- body %>
+      </textarea>
+    </div>
+    <button type="submit" class="btn btn-default">送信</button>
+  </form>
+</script>
+
+<script type="text/template" id="noteControlView-template">
+
+<div class="row">
+  <div class="col-sm-6">
+
+    <div class="row">
+      <div class="col-sm-6">
+        <form action="" class="form-inline js-search-form">
+          <input type="text" class="form-control js-search-query" name="q">
+          <div class="input-group-btn">
+            <button class="btn btndefault" type="submit">
+              <i class="glyphicon glyphicon-search"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-sm-6 text-right">
+    <a href="#new" class="btn btn-primary  btn-small js-new">
+      <span class="glyphicon glyphicon-plus"></span>
+      New Note
+    </a>
+    <a href="#test">テスト</a>
+  </div>
+</div>
+
+</script>
+<script type="text/template" id="noteDetailView-template">
+  <h2><%- title %></h2>
+  <p><%- body %></p>
+</script>
+
+
+<!-- 親 template -->
+<script type="text/template" id="noteListView-template">
+
+  <thead><th class="col-md-2" colspan="2">Title</th></thead>
+  <tbody class="js-noteListItemView-container"></tbody>
+
+</script>
+
+<!-- 子 template -->
+<script type="text/template" id="noteListItemView-template">
+  <td>
+    <a href="#notes/<%= id %>"><%- title %></a>
+  </td>
+  <td>
+    <div class="text-right">
+      <a href="#notes/<%- id %>/edit" class="btn btn-default btn-sm js-edit">
+        <span class="glyphicon glyphicon-edit"></span>
+        Edit
+      </a>
+      <a href="#" class="btn btn-danger btn-sm js-delete">
+        <span class="glyphicon glyphicon-remove"></span>
+        Delete
+      </a>
+    </div>
+  </td>
+</script>
+
+
+</body>
+</html>
