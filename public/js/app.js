@@ -4,8 +4,8 @@ $(function(){
 var initialize = function(){
 	alert('イニシャライズ');
 	var collection = new Collection([
-			{title:'initialize',body:'circleci test'},
-			{title:'initialize2',body:'circleci test'}
+			{title:'circle',body:'circleci test'},
+			{title:'circle',body:'circleci test'}
 		]);
 	console.log(collection);
 	collection.each(function(model){
